@@ -1,0 +1,10 @@
+#Directories
+.vs/
+bin/
+bin-int/
+*.sln
+
+!vendor/bin/
+
+#Files
+*.user

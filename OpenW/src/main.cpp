@@ -27,6 +27,20 @@ int width, height;
 float aspect;
 GLuint mvLoc, projLoc;
 glm::mat4 proj, view, model, modelView;
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
+glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraRight = glm::normalize(glm::cross(up, cameraDirection));
+
+float deltaTime = 0.0f;	// Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
+float lastX = 400, lastY = 300;
+bool firstMouse = true;
+float yaw = 0, pitch = 0;
+
 
 GLuint renderingProgram;
 GLuint vao[numVAOs];
@@ -73,6 +87,11 @@ void init(GLFWwindow* window)
 	cubeX = 0.0f;
 	cubeY = -2.0f;
 	cubeZ = 0.0f;
+	view = glm::lookAt(
+		glm::vec3(0.0f, 0.0f, 3.0f),
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f)
+	);
 	setupVertices();
 }
 
@@ -156,6 +175,10 @@ void setupVertices(void)
 }
 void display(GLFWwindow* window, double currentTime)
 {
+	float currentFrame = glfwGetTime();
+	deltaTime = currentFrame - lastFrame;
+	lastFrame = currentFrame;
+
 	GLCall(glClear(GL_COLOR_BUFFER_BIT));
 	GLCall(glClear(GL_DEPTH_BUFFER_BIT));
 	GLCall(glUseProgram(renderingProgram));
@@ -165,7 +188,11 @@ void display(GLFWwindow* window, double currentTime)
 	glfwGetFramebufferSize(window, &width, &height);
 	aspect = (float)width / (float)height;
 	proj = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f);
-	view = glm::translate(glm::mat4(1.0f), glm::vec3(-cameraX, -cameraY, -cameraZ));
+	//view = glm::translate(glm::mat4(1.0f), glm::vec3(-cameraX, -cameraY, -cameraZ));
+	const float radius = 10.0f;
+	float camX = sin(glfwGetTime()) * radius;
+	float camZ = cos(glfwGetTime()) * radius;
+	view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	model = glm::translate(glm::mat4(1.0f), glm::vec3(cubeX, cubeY, cubeZ));
 	modelView = view * model;
 
@@ -186,10 +213,52 @@ void display(GLFWwindow* window, double currentTime)
 	//GLCall(glPointSize(30.0f));
 	//GLCall(glDrawArrays(GL_POINTS, 0, 1));
 }
-void ProcessInput(GLFWwindow* window)
+void processInput(GLFWwindow* window)
 {
+	float cameraSpeed = 2.5f * deltaTime;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		cameraPos += cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		cameraPos -= cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	if (firstMouse)
+	{
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos;
+	lastX = xpos;
+	lastY = ypos;
+
+	float sensitivity = 0.2f;
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.0f)
+		pitch = 89.0f;
+	if (pitch < -89.0f)
+		pitch = -89.0f;
+
+	glm::vec3 direction;
+	direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	direction.y = sin(glm::radians(pitch));
+	direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	cameraFront = glm::normalize(direction);
 }
 
 int main()
@@ -208,6 +277,8 @@ int main()
 		exit(EXIT_FAILURE);
 
 	glfwSwapInterval(1);
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	init(window);
 
@@ -222,7 +293,7 @@ int main()
 	//rendering the frame buffer to the window
 	while (!glfwWindowShouldClose(window))
 	{
-		ProcessInput(window);
+		processInput(window);
 		//Start the Dear ImGui frame
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
